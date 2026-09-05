@@ -3,14 +3,22 @@
 
 Usage:
     PYTHONPATH=src python run_pipeline.py
+    PYTHONPATH=src python run_pipeline.py --raw-dir demo/data_raw --clean-dir demo/data_clean \
+        --outputs-dir demo/outputs --charts-dir demo/outputs/charts --label "SIMULATED DATA"
 
 Requires manually-exported Noga MCP files in data/raw/ (see README.md —
 live scraping is not available from this environment). Runs Stages 2-6
 against whatever date range those files cover.
+
+--raw-dir/--clean-dir/--outputs-dir/--charts-dir let a demo/test run point
+at separate folders instead of the real data/ and outputs/ paths.
+--label prepends a banner (e.g. "SIMULATED DATA") to the top of
+outputs/report.md so a demo run is never mistaken for a real one.
 """
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import pandas as pd
@@ -19,10 +27,16 @@ import yaml
 from bess_analysis import charts, descriptive, dispatch, excel_model, financial, loader, report, sensitivity, validate
 
 ROOT = Path(__file__).parent
-DATA_RAW = ROOT / "data" / "raw"
-DATA_CLEAN = ROOT / "data" / "clean"
-OUTPUTS = ROOT / "outputs"
-CHARTS = OUTPUTS / "charts"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--raw-dir", default=str(ROOT / "data" / "raw"))
+    parser.add_argument("--clean-dir", default=str(ROOT / "data" / "clean"))
+    parser.add_argument("--outputs-dir", default=str(ROOT / "outputs"))
+    parser.add_argument("--charts-dir", default=None, help="Defaults to <outputs-dir>/charts")
+    parser.add_argument("--label", default=None, help='Banner prepended to report.md, e.g. "SIMULATED DATA"')
+    return parser.parse_args()
 
 
 def load_config() -> dict:
@@ -47,13 +61,19 @@ def run_descriptive_for_series(df: pd.DataFrame, price_col: str) -> dict:
 
 
 def main() -> None:
-    config = load_config()
-    CHARTS.mkdir(parents=True, exist_ok=True)
-    DATA_CLEAN.mkdir(parents=True, exist_ok=True)
+    args = parse_args()
+    data_raw = Path(args.raw_dir)
+    data_clean = Path(args.clean_dir)
+    outputs = Path(args.outputs_dir)
+    charts_dir = Path(args.charts_dir) if args.charts_dir else outputs / "charts"
 
-    print("Stage 1: loading raw exports...")
-    raw = loader.load_all_raw(DATA_RAW)
-    print(f"  {len(raw)} raw rows loaded from data/raw/")
+    config = load_config()
+    charts_dir.mkdir(parents=True, exist_ok=True)
+    data_clean.mkdir(parents=True, exist_ok=True)
+
+    print(f"Stage 1: loading raw exports from {data_raw}...")
+    raw = loader.load_all_raw(data_raw)
+    print(f"  {len(raw)} raw rows loaded")
 
     print("Stage 2: building timestamps + validating...")
     df = validate.build_timestamps(raw)
@@ -64,7 +84,7 @@ def main() -> None:
     print(f"  completeness: {completeness['present_hours']}/{completeness['expected_hours']} hours present")
     print(f"  duplicates: {len(duplicates)}")
 
-    df.to_parquet(DATA_CLEAN / "mcp_hourly.parquet", index=False)
+    df.to_parquet(data_clean / "mcp_hourly.parquet", index=False)
 
     print("Stage 3: descriptive analysis...")
     desc_da = run_descriptive_for_series(df, "price_da_nis_mwh")
@@ -145,14 +165,14 @@ def main() -> None:
     )
 
     print("Generating charts...")
-    charts.plot_hour_month_heatmap(desc_da["heatmap_matrix"], "Day-Ahead price (NIS/MWh)", CHARTS / "heatmap_da.png")
-    charts.plot_hour_month_heatmap(desc_rt["heatmap_matrix"], "Real-Time price (NIS/MWh)", CHARTS / "heatmap_rt.png")
-    charts.plot_spread_distribution(desc_da["daily_spread"], CHARTS / "spread_distribution_da.png")
-    charts.plot_concentration_curve(desc_da["daily_spread"], CHARTS / "concentration_da.png")
-    charts.plot_irr_sensitivity_heatmap(irr_grid, CHARTS / "irr_sensitivity.png")
+    charts.plot_hour_month_heatmap(desc_da["heatmap_matrix"], "Day-Ahead price (NIS/MWh)", charts_dir / "heatmap_da.png")
+    charts.plot_hour_month_heatmap(desc_rt["heatmap_matrix"], "Real-Time price (NIS/MWh)", charts_dir / "heatmap_rt.png")
+    charts.plot_spread_distribution(desc_da["daily_spread"], charts_dir / "spread_distribution_da.png")
+    charts.plot_concentration_curve(desc_da["daily_spread"], charts_dir / "concentration_da.png")
+    charts.plot_irr_sensitivity_heatmap(irr_grid, charts_dir / "irr_sensitivity.png")
 
     print("Building outputs/model.xlsx...")
-    excel_model.build_model_workbook(config, base_daily, OUTPUTS / "model.xlsx")
+    excel_model.build_model_workbook(config, base_daily, outputs / "model.xlsx")
 
     print("Writing outputs/report.md...")
     ctx = {
@@ -186,8 +206,11 @@ def main() -> None:
         "config": config,
     }
     report_md = report.build_report(ctx)
-    (OUTPUTS / "report.md").write_text(report_md, encoding="utf-8")
-    print("Done. See outputs/report.md, outputs/charts/, outputs/model.xlsx, data/clean/mcp_hourly.parquet")
+    if args.label:
+        banner = f"# ⚠ {args.label} — NOT REAL NOGA PRICES ⚠\n\nThis report was generated from invented/simulated prices for pipeline testing. Do not use any number below for a real investment decision.\n\n---\n\n"
+        report_md = banner + report_md
+    (outputs / "report.md").write_text(report_md, encoding="utf-8")
+    print(f"Done. See {outputs}/report.md, {charts_dir}/, {outputs}/model.xlsx, {data_clean}/mcp_hourly.parquet")
 
 
 if __name__ == "__main__":

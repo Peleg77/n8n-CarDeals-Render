@@ -8,3 +8,7 @@ data/clean/*
 outputs/charts/*
 !outputs/charts/.gitkeep
 outputs/*.xlsx
+
+# demo/ (synthetic-data run) keeps its report, charts and workbook committed
+# as proof the pipeline works, but not the intermediate parquet.
+demo/data_clean/*.parquet
