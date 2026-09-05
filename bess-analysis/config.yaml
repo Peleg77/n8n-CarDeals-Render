@@ -1,0 +1,33 @@
+# BESS feasibility model parameters.
+# Everything the financial model depends on lives here — no hardcoded
+# assumptions in code. Edit this file to run sensitivities manually.
+
+# --- Battery unit ---
+duration_hours: 4          # energy duration of the base unit (MWh per MW)
+rte: 0.85                  # round-trip efficiency (charge 1.0 MWh in -> 0.85 MWh out)
+
+# --- Capex / Opex ---
+capex_per_kwh_nis: 800      # NIS per kWh of energy capacity. Sensitivity range: 600-1000
+opex_per_mwh_year_nis: 20000  # NIS/MW-year: O&M, insurance, land, augmentation reserve
+
+# --- Financial ---
+project_life_years: 15
+discount_rate_unlevered: 0.08
+degradation_annual: 0.02   # annual capacity fade (reduces MWh throughput, not price)
+availability: 0.97         # fraction of days the unit is available to dispatch
+
+# --- Dispatch ---
+cycles_per_day_variants: [1, 2]     # variants to run in stage 4
+duration_variants_hours: [2, 4, 8]  # duration variants to run in stage 4
+
+# --- Sensitivity grids (stage 6) ---
+sensitivity:
+  capex_per_kwh_nis: [600, 700, 800, 900, 1000]
+  spread_multiplier: [0.7, 0.85, 1.0, 1.15, 1.3]
+  price_cap_percentiles: [99, 97.5, 95, 90]
+  spread_compression_annual_pct: [0.03, 0.05, 0.08]
+
+# --- Data source constants (do not affect the financial model) ---
+timezone: "Asia/Jerusalem"
+publication_start_date: "2025-05-28"
+currency: "NIS"

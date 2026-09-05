@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+data/raw/*
+!data/raw/.gitkeep
+data/clean/*
+!data/clean/.gitkeep
+outputs/charts/*
+!outputs/charts/.gitkeep
+outputs/*.xlsx
